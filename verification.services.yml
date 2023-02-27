@@ -1,0 +1,13 @@
+services:
+  logger.channel.verification:
+    parent: logger.channel_base
+    arguments: ['verification']
+
+  verification.request_verifier:
+    class: Drupal\verification\Service\RequestVerifier
+    arguments:
+      - '@plugin.manager.verification_provider'
+
+  plugin.manager.verification_provider:
+    class: Drupal\verification\Plugin\VerificationProviderManager
+    parent: default_plugin_manager

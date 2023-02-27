@@ -1,0 +1,12 @@
+{
+    "name": "drupal/verification",
+    "description": "Verification API to verify various operations for a request and user.",
+    "type": "drupal-module",
+    "require": {
+      "php": ">=8.0"
+    },
+    "require-dev": {
+      "phpspec/prophecy-phpunit": "^2"
+    },
+    "license": "GPL-2.0-or-later"
+}

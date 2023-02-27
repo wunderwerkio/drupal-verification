@@ -1,0 +1,7 @@
+name: Verification API
+type: module
+description: Implements an API to allow verification of certain operations.
+core_version_requirement: ^9 || ^10
+package: Verification
+
+
