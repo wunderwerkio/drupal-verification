@@ -90,7 +90,7 @@ class Hash extends VerificationProviderBase implements ContainerFactoryPluginInt
 
     [$hash, $timestamp] = $headerData;
 
-    $timeout = $this->getTimeout();
+    $timeout = $this->getTimeout($operation, $user);
     $currentTime = $this->time->getRequestTime();
 
     // Hash is expired.
@@ -194,13 +194,21 @@ class Hash extends VerificationProviderBase implements ContainerFactoryPluginInt
   /**
    * Get the configured password reset timeout.
    *
+   * @param string $operation
+   *   The operation.
+   * @param \Drupal\Core\Session\AccountInterface $user
+   *   The user account.
+   *
    * @return int
    *   The configured timeout in seconds.
    */
-  protected function getTimeout() {
+  protected function getTimeout(string $operation, AccountInterface $user) {
     $config = $this->configFactory->get('user.settings');
+    $timeout = (int) ($config->get('password_reset_timeout') ?? 86400);
 
-    return (int) $config->get('password_reset_timeout') ?? 86400;
+    $this->moduleHandler->alter('verification_provider_hash_timeout', $timeout, $operation, $user);
+
+    return $timeout;
   }
 
   /**

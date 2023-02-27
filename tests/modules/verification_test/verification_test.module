@@ -10,4 +10,14 @@
  */
 function verification_test_verification_provider_hash_supported_operations_alter(&$operations) {
   $operations[] = 'test-operation';
+  $operations[] = 'op-with-short-timeout';
+}
+
+/**
+ * Implements hook_verification_provider_hash_timeout_alter().
+ */
+function verification_test_verification_provider_hash_timeout_alter(&$timeout, $operation) {
+  if ($operation === 'op-with-short-timeout') {
+    $timeout = 60;
+  }
 }

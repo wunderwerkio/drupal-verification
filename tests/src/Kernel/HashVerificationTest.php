@@ -96,6 +96,32 @@ class HashVerificationTest extends EntityKernelTestBase {
   }
 
   /**
+   * Test the verification timeout.
+   */
+  public function testVerificationTimeout() {
+    // Default timeout is 86400 seconds.
+    // Subtracting one more makes the hash expired.
+    $timestamp = \Drupal::time()->getRequestTime() - 86401;
+
+    // Hash is expired.
+    $hash = user_pass_rehash($this->user, $timestamp);
+    $request = new Request();
+    $request->setMethod('POST');
+    $request->headers->set('X-Verification-Hash', $hash . '$$' . $timestamp);
+    $this->assertFalse($this->verifier->verify($request, 'register', $this->user));
+
+    // Test modified timeout via hooks.
+    $timestamp = \Drupal::time()->getRequestTime() - 61;
+
+    // Hash is expired.
+    $hash = user_pass_rehash($this->user, $timestamp);
+    $request = new Request();
+    $request->setMethod('POST');
+    $request->headers->set('X-Verification-Hash', $hash . '$$' . $timestamp);
+    $this->assertFalse($this->verifier->verify($request, 'op-with-short-timeout', $this->user));
+  }
+
+  /**
    * Test hash verification provider with explicit email.
    */
   public function testVerificationWithEmail() {
