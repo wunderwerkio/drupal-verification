@@ -6,6 +6,7 @@ namespace Drupal\verification\Plugin\VerificationProvider;
 
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\user\Entity\User;
@@ -46,6 +47,7 @@ class Hash extends VerificationProviderBase implements ContainerFactoryPluginInt
     protected ConfigFactoryInterface $configFactory,
     protected TimeInterface $time,
     protected LoggerInterface $logger,
+    protected ModuleHandlerInterface $moduleHandler,
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
   }
@@ -61,6 +63,7 @@ class Hash extends VerificationProviderBase implements ContainerFactoryPluginInt
       $container->get('config.factory'),
       $container->get('datetime.time'),
       $container->get('logger.channel.verification'),
+      $container->get('module_handler'),
     );
   }
 
@@ -74,7 +77,7 @@ class Hash extends VerificationProviderBase implements ContainerFactoryPluginInt
     }
 
     // Unsupported operation.
-    if (!in_array($operation, $this->supportedOperations)) {
+    if (!in_array($operation, $this->getSupportedOperations())) {
       return FALSE;
     }
 
@@ -198,6 +201,23 @@ class Hash extends VerificationProviderBase implements ContainerFactoryPluginInt
     $config = $this->configFactory->get('user.settings');
 
     return (int) $config->get('password_reset_timeout') ?? 86400;
+  }
+
+  /**
+   * Get supported operations.
+   *
+   * Modules can use the hook_verification_provider_supported_operations() hook
+   * to alter the list of supported operations.
+   *
+   * @return array
+   *   An array of supported operations.
+   */
+  protected function getSupportedOperations(): array {
+    $operations = $this->supportedOperations;
+
+    $this->moduleHandler->alter('verification_provider_hash_supported_operations', $operations);
+
+    return $operations;
   }
 
 }

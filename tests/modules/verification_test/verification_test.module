@@ -1,0 +1,13 @@
+<?php
+
+/**
+ * @file
+ * Module file for verification_test.
+ */
+
+/**
+ * Implements hook_verification_provider_hash_supported_operations_alter().
+ */
+function verification_test_verification_provider_hash_supported_operations_alter(&$operations) {
+  $operations[] = 'test-operation';
+}

@@ -19,6 +19,7 @@ class HashVerificationTest extends EntityKernelTestBase {
    */
   protected static $modules = [
     'verification',
+    'verification_test',
   ];
 
   /**
@@ -85,6 +86,13 @@ class HashVerificationTest extends EntityKernelTestBase {
     $request->setMethod('POST');
     $request->headers->set('X-Verification-Hash', $hash . '$$' . $timestamp);
     $this->assertTrue($this->verifier->verify($request, 'register', $this->user));
+
+    // Success for operation added via hook.
+    $hash = user_pass_rehash($this->user, $timestamp);
+    $request = new Request();
+    $request->setMethod('POST');
+    $request->headers->set('X-Verification-Hash', $hash . '$$' . $timestamp);
+    $this->assertTrue($this->verifier->verify($request, 'test-operation', $this->user));
   }
 
   /**

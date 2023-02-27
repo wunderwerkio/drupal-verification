@@ -1,0 +1,8 @@
+name: Verification Test
+type: module
+description: Test module for Verification
+core_version_requirement: '^9'
+package: Testing
+hidden: true
+dependencies:
+  - verification:verification
