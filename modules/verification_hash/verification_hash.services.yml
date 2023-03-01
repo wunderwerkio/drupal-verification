@@ -1,0 +1,3 @@
+services:
+  verification_hash.manager:
+    class: Drupal\verification_hash\VerificationHashManager

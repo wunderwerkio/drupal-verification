@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Drupal\verification\Plugin\VerificationProvider;
+namespace Drupal\verification_hash\Plugin\VerificationProvider;
 
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
@@ -12,6 +12,7 @@ use Drupal\Core\Session\AccountInterface;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use Drupal\verification\Plugin\VerificationProviderBase;
+use Drupal\verification_hash\VerificationHashManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -48,6 +49,7 @@ class Hash extends VerificationProviderBase implements ContainerFactoryPluginInt
     protected TimeInterface $time,
     protected LoggerInterface $logger,
     protected ModuleHandlerInterface $moduleHandler,
+    protected VerificationHashManagerInterface $verificationHashManager,
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
   }
@@ -64,13 +66,97 @@ class Hash extends VerificationProviderBase implements ContainerFactoryPluginInt
       $container->get('datetime.time'),
       $container->get('logger.channel.verification'),
       $container->get('module_handler'),
+      $container->get('verification_hash.manager'),
     );
   }
 
   /**
    * {@inheritdoc}
    */
-  public function verifyRequest(Request $request, string $operation, AccountInterface $user, ?string $email = NULL): bool {
+  public function verifyOperation(Request $request, string $operation, AccountInterface $user, ?string $email = NULL): bool {
+    $callback = $this->coreVerify($request, $operation, $user, $email);
+    if ($callback === FALSE) {
+      return FALSE;
+    }
+
+    return $callback(
+      function (string $hash, int $timestamp, int $timeout, UserInterface $user) use ($operation, $email) {
+        $isSuccess = $this->verificationHashManager->validateHash(
+          $hash,
+          $timestamp,
+          $timeout,
+          VerificationHashManagerInterface::MODE_OPERATION,
+          $user,
+          $operation,
+          '',
+          $email,
+        );
+
+        // Invalidate hash by updating the changed value of the user.
+        if ($isSuccess) {
+          $user->setChangedTime($this->time->getRequestTime())->save();
+        }
+
+        // Hash and timestamp are valid.
+        return $isSuccess;
+      }
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function verifyLogin(Request $request, string $operation, AccountInterface $user, ?string $email = NULL): bool {
+    $callback = $this->coreVerify($request, $operation, $user, $email);
+    if ($callback === FALSE) {
+      return FALSE;
+    }
+
+    return $callback(
+      function (string $hash, int $timestamp, int $timeout, UserInterface $user) use ($operation, $email) {
+        $isSuccess = $this->verificationHashManager->validateHash(
+          $hash,
+          $timestamp,
+          $timeout,
+          VerificationHashManagerInterface::MODE_LOGIN,
+          $user,
+          $operation,
+          '',
+          $email,
+        );
+
+        // The login operation is finished after the login,
+        // so we need to invalidate the core hash in the login step.
+        if ($operation === 'login') {
+          $user->setChangedTime($this->time->getRequestTime())->save();
+        }
+
+        return $isSuccess;
+      }
+    );
+  }
+
+  /**
+   * Common verification logic.
+   *
+   * This method implements the common verification logic
+   * used by all verification methods.
+   *
+   * Specific verification is passed as a closure to the
+   * return function of this method.
+   *
+   * @param \Symfony\Component\HttpFoundation\Request $request
+   *   The request object.
+   * @param string $operation
+   *   The operation name.
+   * @param \Drupal\Core\Session\AccountInterface $user
+   *   The user object.
+   *
+   * @return \Closure|false
+   *   A closure that executes specific verification logic
+   *   or FALSE if preemtive checks have failed.
+   */
+  protected function coreVerify(Request $request, string $operation, AccountInterface $user) {
     // Only verify methods that are eligible for modifying resources.
     if ($request->isMethodCacheable()) {
       return FALSE;
@@ -88,71 +174,24 @@ class Hash extends VerificationProviderBase implements ContainerFactoryPluginInt
       return FALSE;
     }
 
+    // Load user.
+    if ($user instanceof UserInterface === FALSE) {
+      $user = User::load($user->id());
+    }
+    /** @var \Drupal\user\Entity\UserInterface $user */
+    if (!$user) {
+      $this->logger->error('Could not verify by hash: User not found!');
+
+      return FALSE;
+    }
+
     [$hash, $timestamp] = $headerData;
 
     $timeout = $this->getTimeout($operation, $user);
-    $currentTime = $this->time->getRequestTime();
 
-    // Hash is expired.
-    if ($currentTime < $timestamp || $timeout < $currentTime - $timestamp) {
-      return FALSE;
-    }
-
-    $referenceHash = $this->createHash($user, (int) $timestamp, $email);
-    if (!$referenceHash) {
-      $this->logger->critical('Hash verification failed: User for account with id %id could not be loaded!', [
-        '%id' => $user->id(),
-      ]);
-
-      return FALSE;
-    }
-
-    // Hash is not valid.
-    if (!hash_equals($hash, $referenceHash)) {
-      return FALSE;
-    }
-
-    // Hash and timestamp are valid.
-    return TRUE;
-  }
-
-  /**
-   * Create hash value.
-   *
-   * @param \Drupal\Core\Session\AccountInterface $user
-   *   The user to generate the hash for.
-   * @param int $timestamp
-   *   The timestamp of the hash.
-   * @param string|null $email
-   *   (optional) E-Mail address.
-   *
-   * @return string|null
-   *   The generated hash or NULL if the user could not be loaded.
-   */
-  protected function createHash(AccountInterface $user, int $timestamp, ?string $email = NULL) {
-    // If explicit email address is set, create a
-    // cloned user object with the explicit email addre to
-    // create the correct hash value.
-    if ($email) {
-      // Load user if needed.
-      if ($user instanceof UserInterface === FALSE) {
-        $user = User::load($user->id());
-      }
-
-      /** @var \Drupal\user\Entity\UserInterface $user */
-
-      // Failsafe. Should normally never happen.
-      if (!$user) {
-        return NULL;
-      }
-
-      $clonedUser = clone $user;
-      $clonedUser->setEmail($email);
-
-      return user_pass_rehash($clonedUser, $timestamp);
-    }
-
-    return user_pass_rehash($user, $timestamp);
+    return function (\Closure $innerVerify) use ($hash, $timestamp, $timeout, $user) {
+      return $innerVerify($hash, (int) $timestamp, $timeout, $user);
+    };
   }
 
   /**
@@ -206,7 +245,7 @@ class Hash extends VerificationProviderBase implements ContainerFactoryPluginInt
     $config = $this->configFactory->get('user.settings');
     $timeout = (int) ($config->get('password_reset_timeout') ?? 86400);
 
-    $this->moduleHandler->alter('verification_provider_hash_timeout', $timeout, $operation, $user);
+    $this->moduleHandler->alter('verification_hash_timeout', $timeout, $operation, $user);
 
     return $timeout;
   }
@@ -223,7 +262,7 @@ class Hash extends VerificationProviderBase implements ContainerFactoryPluginInt
   protected function getSupportedOperations(): array {
     $operations = $this->supportedOperations;
 
-    $this->moduleHandler->alter('verification_provider_hash_supported_operations', $operations);
+    $this->moduleHandler->alter('verification_hash_supported_operations', $operations);
 
     return $operations;
   }

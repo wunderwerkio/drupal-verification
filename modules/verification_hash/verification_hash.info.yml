@@ -1,0 +1,7 @@
+name: Hash Provider for Verification API
+type: module
+description: Implements a hash provider for the Verification API.
+core_version_requirement: ^9 || ^10
+package: Verification
+dependencies:
+  - verification
