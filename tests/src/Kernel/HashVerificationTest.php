@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Drupal\Tests\verification\Kernel;
 
 use Drupal\KernelTests\Core\Entity\EntityKernelTestBase;
+use Drupal\Tests\verification\Traits\VerificationTestTrait;
 use Drupal\user\UserInterface;
-use Drupal\verification\Result\VerificationResult;
 use Drupal\verification\Service\RequestVerifier;
 use Drupal\verification_hash\Plugin\VerificationProvider\Hash;
 use Drupal\verification_hash\VerificationHashManager;
@@ -16,6 +16,8 @@ use Symfony\Component\HttpFoundation\Request;
  * Test the Hash Verification Provider.
  */
 class HashVerificationTest extends EntityKernelTestBase {
+
+  use VerificationTestTrait;
 
   /**
    * {@inheritdoc}
@@ -182,48 +184,6 @@ class HashVerificationTest extends EntityKernelTestBase {
 
     $this->assertOk($this->verifier->verifyOperation($request, 'register', $user));
     $this->assertErr($this->verifier->verifyOperation($request, 'register', $user));
-  }
-
-  /**
-   * Asserts that a verification result is ok.
-   *
-   * @param \Drupal\verification\VerificationResult $result
-   *   The verification result.
-   */
-  protected function assertOk(VerificationResult $result) {
-    $this->assertTrue($result->ok);
-  }
-
-  /**
-   * Asserts that a verification result is an error.
-   *
-   * @param \Drupal\verification\VerificationResult $result
-   *   The verification result.
-   * @param string|null $code
-   *   (optional) The expected error code.
-   */
-  protected function assertErr(VerificationResult $result, ?string $code = NULL) {
-    $this->assertTrue($result->err);
-
-    if ($code) {
-      $this->assertEquals($code, $result->code);
-    }
-  }
-
-  /**
-   * Asserts that a verification result is unhandled.
-   *
-   * @param \Drupal\verification\VerificationResult $result
-   *   The verification result.
-   * @param string|null $code
-   *   (optional) The expected error code.
-   */
-  protected function assertUnhandled(VerificationResult $result, ?string $code = NULL) {
-    $this->assertTrue($result->unhandled);
-
-    if ($code) {
-      $this->assertEquals($code, $result->code);
-    }
   }
 
 }
