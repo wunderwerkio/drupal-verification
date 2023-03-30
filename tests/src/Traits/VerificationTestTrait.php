@@ -17,7 +17,7 @@ trait VerificationTestTrait {
    * @param \Drupal\verification\VerificationResult $result
    *   The verification result.
    */
-  protected function assertOk(VerificationResult $result) {
+  protected function assertVerificationOk(VerificationResult $result) {
     $this->assertTrue($result->ok);
   }
 
@@ -29,7 +29,7 @@ trait VerificationTestTrait {
    * @param string|null $code
    *   (optional) The expected error code.
    */
-  protected function assertErr(VerificationResult $result, ?string $code = NULL) {
+  protected function assertVerificationErr(VerificationResult $result, ?string $code = NULL) {
     $this->assertTrue($result->err);
 
     if ($code) {
@@ -45,7 +45,7 @@ trait VerificationTestTrait {
    * @param string|null $code
    *   (optional) The expected error code.
    */
-  protected function assertUnhandled(VerificationResult $result, ?string $code = NULL) {
+  protected function assertVerificationUnhandled(VerificationResult $result, ?string $code = NULL) {
     $this->assertTrue($result->unhandled);
 
     if ($code) {
