@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\verification\Plugin;
 
 use Drupal\Core\Session\AccountInterface;
+use Drupal\verification\Result\VerificationResult;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -31,15 +32,15 @@ interface VerificationProviderInterface {
    * @param string|null $email
    *   (optional) Email address to use.
    *
-   * @return bool
-   *   TRUE if the verification was successful, FALSE otherwise.
+   * @return \Drupal\verification\Result\VerificationResult
+   *   The verification result.
    */
   public function verifyOperation(
     Request $request,
     string $operation,
     AccountInterface $user,
     ?string $email = NULL,
-  ): bool;
+  ): VerificationResult;
 
   /**
    * Verifies an operation from a request.
@@ -60,14 +61,14 @@ interface VerificationProviderInterface {
    * @param string|null $email
    *   (optional) Email address to use.
    *
-   * @return bool
-   *   TRUE if the verification was successful, FALSE otherwise.
+   * @return \Drupal\verification\Result\VerificationResult
+   *   The verification result.
    */
   public function verifyLogin(
     Request $request,
     string $operation,
     AccountInterface $user,
     ?string $email = NULL,
-  ): bool;
+  ): VerificationResult;
 
 }

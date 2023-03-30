@@ -12,6 +12,7 @@ use Drupal\Core\Session\AccountInterface;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use Drupal\verification\Plugin\VerificationProviderBase;
+use Drupal\verification\Result\VerificationResult;
 use Drupal\verification_hash\VerificationHashManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -28,6 +29,10 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 class Hash extends VerificationProviderBase implements ContainerFactoryPluginInterface {
 
   const HEADER_HASH = 'X-Verification-Hash';
+
+  // Error codes.
+  const ERR_USER_NOT_FOUND = 'hash_user_not_found';
+  const ERR_INVALID_HASH = 'hash_invalid';
 
   /**
    * Array of supported operations for this provider.
@@ -73,10 +78,10 @@ class Hash extends VerificationProviderBase implements ContainerFactoryPluginInt
   /**
    * {@inheritdoc}
    */
-  public function verifyOperation(Request $request, string $operation, AccountInterface $user, ?string $email = NULL): bool {
+  public function verifyOperation(Request $request, string $operation, AccountInterface $user, ?string $email = NULL): VerificationResult {
     $callback = $this->coreVerify($request, $operation, $user, $email);
-    if ($callback === FALSE) {
-      return FALSE;
+    if ($callback instanceof VerificationResult) {
+      return $callback;
     }
 
     return $callback(
@@ -95,10 +100,12 @@ class Hash extends VerificationProviderBase implements ContainerFactoryPluginInt
         // Invalidate hash by updating the changed value of the user.
         if ($isSuccess) {
           $user->setChangedTime($this->time->getRequestTime())->save();
+
+          return VerificationResult::ok();
         }
 
         // Hash and timestamp are valid.
-        return $isSuccess;
+        return VerificationResult::err(self::ERR_INVALID_HASH);
       }
     );
   }
@@ -106,10 +113,10 @@ class Hash extends VerificationProviderBase implements ContainerFactoryPluginInt
   /**
    * {@inheritdoc}
    */
-  public function verifyLogin(Request $request, string $operation, AccountInterface $user, ?string $email = NULL): bool {
+  public function verifyLogin(Request $request, string $operation, AccountInterface $user, ?string $email = NULL): VerificationResult {
     $callback = $this->coreVerify($request, $operation, $user, $email);
-    if ($callback === FALSE) {
-      return FALSE;
+    if ($callback instanceof VerificationResult) {
+      return $callback;
     }
 
     return $callback(
@@ -131,7 +138,9 @@ class Hash extends VerificationProviderBase implements ContainerFactoryPluginInt
           $user->setChangedTime($this->time->getRequestTime())->save();
         }
 
-        return $isSuccess;
+        return $isSuccess
+          ? VerificationResult::ok()
+          : VerificationResult::err(self::ERR_INVALID_HASH);
       }
     );
   }
@@ -152,26 +161,26 @@ class Hash extends VerificationProviderBase implements ContainerFactoryPluginInt
    * @param \Drupal\Core\Session\AccountInterface $user
    *   The user object.
    *
-   * @return \Closure|false
+   * @return \Closure|VerificationResult
    *   A closure that executes specific verification logic
    *   or FALSE if preemtive checks have failed.
    */
   protected function coreVerify(Request $request, string $operation, AccountInterface $user) {
     // Only verify methods that are eligible for modifying resources.
     if ($request->isMethodCacheable()) {
-      return FALSE;
+      return VerificationResult::unhandled();
     }
 
     // Unsupported operation.
     if (!in_array($operation, $this->getSupportedOperations())) {
-      return FALSE;
+      return VerificationResult::unhandled();
     }
 
     $headerData = $this->getHeaderValue($request);
 
     // Verification data not provided.
     if (is_null($headerData)) {
-      return FALSE;
+      return VerificationResult::unhandled();
     }
 
     // Load user.
@@ -182,7 +191,7 @@ class Hash extends VerificationProviderBase implements ContainerFactoryPluginInt
     if (!$user) {
       $this->logger->error('Could not verify by hash: User not found!');
 
-      return FALSE;
+      return VerificationResult::err(self::ERR_USER_NOT_FOUND);
     }
 
     [$hash, $timestamp] = $headerData;

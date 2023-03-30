@@ -6,6 +6,7 @@ namespace Drupal\verification\Service;
 
 use Drupal\Core\Session\AccountInterface;
 use Drupal\verification\Plugin\VerificationProviderManagerInterface;
+use Drupal\verification\Result\VerificationResult;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -35,23 +36,28 @@ class RequestVerifier {
    * @param string|null $email
    *   (optional) Email address to use.
    *
-   * @return bool
-   *   TRUE if the verification was successful, FALSE otherwise.
+   * @return \Drupal\verification\Result\VerificationResult
+   *   The verification result.
    *
    * @see Drupal\verification\Plugin\VerificationProviderInterface
    */
-  public function verifyLogin(Request $request, string $operation, AccountInterface $account, ?string $email = NULL) {
+  public function verifyLogin(Request $request, string $operation, AccountInterface $account, ?string $email = NULL): VerificationResult {
     $instances = $this->verificationProviderManager->getInstances();
+    $finalResult = VerificationResult::unhandled();
 
     foreach ($instances as $plugin) {
       $result = $plugin->verifyLogin($request, $operation, $account, $email);
 
-      if ($result === TRUE) {
-        return TRUE;
+      if ($result->ok) {
+        return $result;
+      }
+
+      if ($result->err) {
+        $finalResult = $result;
       }
     }
 
-    return FALSE;
+    return $finalResult;
   }
 
   /**
@@ -66,23 +72,28 @@ class RequestVerifier {
    * @param string|null $email
    *   (optional) Email address to use.
    *
-   * @return bool
-   *   TRUE if the verification was successful, FALSE otherwise.
+   * @return \Drupal\verification\Result\VerificationResult
+   *   The verification result.
    *
    * @see Drupal\verification\Plugin\VerificationProviderInterface
    */
-  public function verifyOperation(Request $request, string $operation, AccountInterface $account, ?string $email = NULL) {
+  public function verifyOperation(Request $request, string $operation, AccountInterface $account, ?string $email = NULL): VerificationResult {
     $instances = $this->verificationProviderManager->getInstances();
+    $finalResult = VerificationResult::unhandled();
 
     foreach ($instances as $plugin) {
       $result = $plugin->verifyOperation($request, $operation, $account, $email);
 
-      if ($result === TRUE) {
-        return TRUE;
+      if ($result->ok) {
+        return $result;
+      }
+
+      if ($result->err) {
+        $finalResult = $result;
       }
     }
 
-    return FALSE;
+    return $finalResult;
   }
 
 }

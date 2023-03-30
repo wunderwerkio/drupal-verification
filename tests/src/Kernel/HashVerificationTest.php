@@ -6,7 +6,9 @@ namespace Drupal\Tests\verification\Kernel;
 
 use Drupal\KernelTests\Core\Entity\EntityKernelTestBase;
 use Drupal\user\UserInterface;
+use Drupal\verification\Result\VerificationResult;
 use Drupal\verification\Service\RequestVerifier;
+use Drupal\verification_hash\Plugin\VerificationProvider\Hash;
 use Drupal\verification_hash\VerificationHashManager;
 use Symfony\Component\HttpFoundation\Request;
 
@@ -59,55 +61,55 @@ class HashVerificationTest extends EntityKernelTestBase {
     // Fail for request without hash data.
     $request = new Request();
     $request->setMethod('POST');
-    $this->assertFalse($this->verifier->verifyOperation($request, 'register', $this->user));
+    $this->assertUnhandled($this->verifier->verifyOperation($request, 'register', $this->user));
 
     // Fail for invalid data.
     $request = new Request();
     $request->setMethod('POST');
     $request->headers->set('X-Verification-Hash', '_invalid-hash_$$' . $timestamp);
-    $this->assertFalse($this->verifier->verifyOperation($request, 'register', $this->user));
+    $this->assertErr($this->verifier->verifyOperation($request, 'register', $this->user), Hash::ERR_INVALID_HASH);
 
     // Fail for invalid operation.
     $hash = $this->hash->createHash($this->user, 'operation', $timestamp);
     $request = new Request();
     $request->setMethod('POST');
     $request->headers->set('X-Verification-Hash', $hash . '$$' . $timestamp);
-    $this->assertFalse($this->verifier->verifyOperation($request, 'invalid-operation', $this->user));
+    $this->assertUnhandled($this->verifier->verifyOperation($request, 'invalid-operation', $this->user));
 
     // Fail for GET request.
     $hash = $this->hash->createHash($this->user, 'operation', $timestamp);
     $request = new Request();
     $request->setMethod('GET');
     $request->headers->set('X-Verification-Hash', $hash . '$$' . $timestamp);
-    $this->assertFalse($this->verifier->verifyOperation($request, 'invalid-operation', $this->user));
+    $this->assertUnhandled($this->verifier->verifyOperation($request, 'invalid-operation', $this->user));
 
     // Fail for HEAD request.
     $hash = $this->hash->createHash($this->user, 'operation', $timestamp);
     $request = new Request();
     $request->setMethod('GET');
     $request->headers->set('X-Verification-Hash', $hash . '$$' . $timestamp);
-    $this->assertFalse($this->verifier->verifyOperation($request, 'invalid-operation', $this->user));
+    $this->assertUnhandled($this->verifier->verifyOperation($request, 'invalid-operation', $this->user));
 
     // Fail with non-matching operation.
     $hash = $this->hash->createHash($this->user, 'register', $timestamp);
     $request = new Request();
     $request->setMethod('POST');
     $request->headers->set('X-Verification-Hash', $hash . '$$' . $timestamp);
-    $this->assertFalse($this->verifier->verifyOperation($request, 'login', $this->user));
+    $this->assertErr($this->verifier->verifyOperation($request, 'login', $this->user), Hash::ERR_INVALID_HASH);
 
     // Success.
     $hash = $this->hash->createHash($this->user, 'register', $timestamp);
     $request = new Request();
     $request->setMethod('POST');
     $request->headers->set('X-Verification-Hash', $hash . '$$' . $timestamp);
-    $this->assertTrue($this->verifier->verifyOperation($request, 'register', $this->user));
+    $this->assertOk($this->verifier->verifyOperation($request, 'register', $this->user));
 
     // Success for operation added via hook.
     $hash = $this->hash->createHash($this->user, 'test-operation', $timestamp);
     $request = new Request();
     $request->setMethod('POST');
     $request->headers->set('X-Verification-Hash', $hash . '$$' . $timestamp);
-    $this->assertTrue($this->verifier->verifyOperation($request, 'test-operation', $this->user));
+    $this->assertOk($this->verifier->verifyOperation($request, 'test-operation', $this->user));
   }
 
   /**
@@ -123,7 +125,7 @@ class HashVerificationTest extends EntityKernelTestBase {
     $request = new Request();
     $request->setMethod('POST');
     $request->headers->set('X-Verification-Hash', $hash . '$$' . $timestamp);
-    $this->assertFalse($this->verifier->verifyOperation($request, 'register', $this->user));
+    $this->assertErr($this->verifier->verifyOperation($request, 'register', $this->user));
 
     // Test modified timeout via hooks.
     $timestamp = \Drupal::time()->getRequestTime() - 61;
@@ -133,7 +135,7 @@ class HashVerificationTest extends EntityKernelTestBase {
     $request = new Request();
     $request->setMethod('POST');
     $request->headers->set('X-Verification-Hash', $hash . '$$' . $timestamp);
-    $this->assertFalse($this->verifier->verifyOperation($request, 'op-with-short-timeout', $this->user));
+    $this->assertErr($this->verifier->verifyOperation($request, 'op-with-short-timeout', $this->user));
   }
 
   /**
@@ -148,14 +150,14 @@ class HashVerificationTest extends EntityKernelTestBase {
     $request = new Request();
     $request->setMethod('POST');
     $request->headers->set('X-Verification-Hash', $hash . '$$' . $timestamp);
-    $this->assertFalse($this->verifier->verifyOperation($request, 'register', $this->user, $email));
+    $this->assertErr($this->verifier->verifyOperation($request, 'register', $this->user, $email));
 
     // Success.
     $hash = $this->hash->createHash($this->user, 'register', $timestamp, '', $email);
     $request = new Request();
     $request->setMethod('POST');
     $request->headers->set('X-Verification-Hash', $hash . '$$' . $timestamp);
-    $this->assertTrue($this->verifier->verifyOperation($request, 'register', $this->user, $email));
+    $this->assertOk($this->verifier->verifyOperation($request, 'register', $this->user, $email));
   }
 
   /**
@@ -174,12 +176,54 @@ class HashVerificationTest extends EntityKernelTestBase {
     $request->setMethod('POST');
     $request->headers->set('X-Verification-Hash', $hash . '$$' . $timestamp);
 
-    $this->assertTrue($this->verifier->verifyLogin($request, 'register', $user));
+    $this->assertOk($this->verifier->verifyLogin($request, 'register', $user));
     user_login_finalize($user);
-    $this->assertFalse($this->verifier->verifyLogin($request, 'register', $user));
+    $this->assertErr($this->verifier->verifyLogin($request, 'register', $user));
 
-    $this->assertTrue($this->verifier->verifyOperation($request, 'register', $user));
-    $this->assertFalse($this->verifier->verifyOperation($request, 'register', $user));
+    $this->assertOk($this->verifier->verifyOperation($request, 'register', $user));
+    $this->assertErr($this->verifier->verifyOperation($request, 'register', $user));
+  }
+
+  /**
+   * Asserts that a verification result is ok.
+   *
+   * @param \Drupal\verification\VerificationResult $result
+   *   The verification result.
+   */
+  protected function assertOk(VerificationResult $result) {
+    $this->assertTrue($result->ok);
+  }
+
+  /**
+   * Asserts that a verification result is an error.
+   *
+   * @param \Drupal\verification\VerificationResult $result
+   *   The verification result.
+   * @param string|null $code
+   *   (optional) The expected error code.
+   */
+  protected function assertErr(VerificationResult $result, ?string $code = NULL) {
+    $this->assertTrue($result->err);
+
+    if ($code) {
+      $this->assertEquals($code, $result->code);
+    }
+  }
+
+  /**
+   * Asserts that a verification result is unhandled.
+   *
+   * @param \Drupal\verification\VerificationResult $result
+   *   The verification result.
+   * @param string|null $code
+   *   (optional) The expected error code.
+   */
+  protected function assertUnhandled(VerificationResult $result, ?string $code = NULL) {
+    $this->assertTrue($result->unhandled);
+
+    if ($code) {
+      $this->assertEquals($code, $result->code);
+    }
   }
 
 }
