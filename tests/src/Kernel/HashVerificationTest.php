@@ -186,4 +186,43 @@ class HashVerificationTest extends EntityKernelTestBase {
     $this->assertVerificationErr($this->verifier->verifyOperation($request, 'register', $user));
   }
 
+  /**
+   * Test verification error response.
+   */
+  public function testVerificationErrorResponse() {
+    $timestamp = \Drupal::time()->getRequestTime();
+
+    // Fail for request without hash data.
+    $request = new Request();
+    $request->setMethod('POST');
+    $result = $this->verifier->verifyOperation($request, 'register', $this->user);
+
+    $response = $result->toErrorResponse();
+    $this->assertEquals(403, $response->getStatusCode());
+    $this->assertStringContainsString('"code":"verification_unhandled"', $response->getContent());
+
+    // Fail for invalid data.
+    $request = new Request();
+    $request->setMethod('POST');
+    $request->headers->set('X-Verification-Hash', '_invalid-hash_$$' . $timestamp);
+
+    $result = $this->verifier->verifyOperation($request, 'register', $this->user);
+
+    $response = $result->toErrorResponse();
+    $this->assertEquals(403, $response->getStatusCode());
+    $this->assertStringContainsString('"code":"verification_failed"', $response->getContent());
+    $this->assertStringContainsString('"verification_error_code":"hash_invalid"', $response->getContent());
+
+    // Success.
+    $hash = $this->hash->createHash($this->user, 'register', $timestamp);
+    $request = new Request();
+    $request->setMethod('POST');
+    $request->headers->set('X-Verification-Hash', $hash . '$$' . $timestamp);
+
+    $result = $this->verifier->verifyOperation($request, 'register', $this->user);
+
+    $response = $result->toErrorResponse();
+    $this->assertNull($response);
+  }
+
 }

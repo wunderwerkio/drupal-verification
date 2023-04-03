@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\verification\Result;
 
+use Wunderwerk\JsonApiError\JsonApiErrorResponse;
+
 /**
  * A verification result.
  *
@@ -66,6 +68,39 @@ class VerificationResult {
     $this->err = $err;
     $this->unhandled = $unhandled;
     $this->code = $code;
+  }
+
+  /**
+   * Returns the result as a JSON API error response.
+   *
+   * @return \Wunderwerk\JsonApiError\JsonApiErrorResponse|null
+   *   The JSON API error response or null if the result was ok.
+   */
+  public function toErrorResponse(): ?JsonApiErrorResponse {
+    if ($this->ok) {
+      return NULL;
+    }
+
+    // Verification failed.
+    if ($this->err) {
+      return JsonApiErrorResponse::fromError(
+        status: 403,
+        title: 'Verification failed',
+        code: 'verification_failed',
+        detail: 'The verification was not successful.',
+        meta: [
+          'verification_error_code' => $this->code,
+        ]
+      );
+    }
+
+    // Unhandled.
+    return JsonApiErrorResponse::fromError(
+      status: 403,
+      title: 'Verification failed',
+      code: 'verification_unhandled',
+      detail: 'No verification provider was able to handle the request.',
+    );
   }
 
   /**
