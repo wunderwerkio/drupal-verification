@@ -1,4 +1,4 @@
-# Verification API
+# Verification API [![Lint & Test](https://github.com/wunderwerkio/drupal-verification/actions/workflows/main.yml/badge.svg)](https://github.com/wunderwerkio/drupal-verification/actions/workflows/main.yml)
 
 The Verification API module provides the foundation to have multiple Verification Provider Plugins verify a given HTTP Request for a given User that a specific operation (e.g. password-reset) can be done.
 
