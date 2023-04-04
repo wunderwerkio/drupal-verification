@@ -2,11 +2,35 @@
 
 The Verification API module provides the foundation to have multiple Verification Provider Plugins verify a given HTTP Request for a given User that a specific operation (e.g. password-reset) can be done.
 
+**Table of Contents:**
+
+- [Motivation](#motivation)
+- [Diagram](#diagram)
+- [Technical Details](#technical-details)
+  - [Using a different email](#using-a-different-email)
+  - [Using multiple verification providers](#using-multiple-verification-providers)
+- [Built-in Verification Providers](#built-in-verification-providers)
+  - [Hash Provider](#hash-provider)
+- [Implementing a custom provider](#implementing-a-custom-provider)
+
 ## Motivation
 
 In decoupled scenarios, handling verification of security-sensitive operations (e.g. email update, password reset, account cancellation) can be very tedious to implement, especially if multiple verification methods should be supported.
 
-This module tries to solve this issue by implementing `VerificationProvider` Plugins that take a HTTP Request, a User and a operation and then verify those parameters for the given operation.
+This module tries to solve this issue by implementing `VerificationProvider` Plugins that take a HTTP Request, a User and an operation to then verify those parameters for the given operation.
+
+## Diagram
+
+The following diagram shows how the Verification API works.
+
+```mermaid
+flowchart TD
+    A[Client] -->|Request| B(Protected Route)
+    B --> C{Verification Provider}
+    C -->|Valid Verification Data| D[Success]
+    C -->|Invalid Verification Data| E[Error]
+    C -->|No Verification Data| F[Unhandled]
+```
 
 ## Technical Details
 
@@ -25,7 +49,58 @@ address that is set on the user account.
 When using multiple verification providers, the `verification.request_verifier` services tries all available plugins
 until the first one successfully verifies the request.
 
-## Hash Provider
+## Example
+
+```php
+<?php
+
+use Drupal\Core\Controller\ControllerBase;
+use Drupal\verification\Service\RequestVerifier;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+
+class MyController extends ControllerBase {
+
+  public function __construct(
+    // This is the 'verification.request_verifier' service.
+    protected RequestVerifier $verifier,
+  ) {}
+
+  public function handleUpdatePassword(Request $request): Response {
+    $user = $this->currentUser();
+
+    $payload = $request->getContent();
+    $data = Json::decode($payload);
+
+    $mail = $data['email'];
+
+    // Verify the operation.
+    $result = $this->verifier->verifyOperation($request, 'update-password', $user, $mail);
+
+    // If multiple Verification Providers are available, all results
+    // of the individual providers are aggregated to a single $result.
+    if (!$result->ok) {
+      return $result->toErrorResponse();
+    }
+
+    // Implementation here...
+
+    return new JsonResponse([
+      'status' => 'success'
+    ]);
+  }
+
+}
+```
+
+## Built-in Verification Providers
+
+The Verification API includes built-in verification providers as submodules.
+
+### Hash Provider
+
+**Install the `verification_hash` module.**
 
 The `Hash` provider is a built-in verification provider that uses a hash and timestamp from the `user_pass_rehash` function to verify an operation.
 
