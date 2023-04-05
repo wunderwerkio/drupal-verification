@@ -19,29 +19,19 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Cache Composer dependencies
-        uses: actions/cache@v3
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
         with:
-          path: |
-            /tmp/composer-cache
-            ./web
-            ./vendor
-            ./composer.spoons.json
-            ./composer.spoons.lock
-          key: ${{ runner.os }}-${{ hashFiles('**/composer.json') }}-php${{ matrix.php }}-drupal${{ matrix.drupal }}
+          php-version: "8.1"
 
       - name: Install drupal
-        uses: wunderwerkio/github-action-composer@v1-beta
-        with:
-          php_version: ${{ matrix.php }}
-          setup_drupal: yes
-          drupal_core_constraint: '^${{ matrix.drupal }}'
+        run: bash <(curl -s https://gitlab.com/drupalspoons/composer-plugin/-/raw/master/bin/setup)
+        env:
+          DRUPAL_CORE_CONSTRAINT: ${{ matrix.drupal }}
 
       - name: Lint
-        uses: wunderwerkio/github-action-composer@v1-beta
-        with:
-          php_version: ${{ matrix.php }}
-          command: phpcs
+        run: composer run-script phpcs
+
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -57,26 +47,15 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Cache Composer dependencies
-        uses: actions/cache@v3
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
         with:
-          path: |
-            /tmp/composer-cache
-            ./web
-            ./vendor
-            ./composer.spoons.json
-            ./composer.spoons.lock
-          key: ${{ runner.os }}-${{ hashFiles('**/composer.json') }}-php${{ matrix.php }}-drupal${{ matrix.drupal }}
+          php-version: ${{ matrix.php }}
 
       - name: Install drupal
-        uses: wunderwerkio/github-action-composer@v1-beta
-        with:
-          php_version: ${{ matrix.php }}
-          setup_drupal: yes
-          drupal_core_constraint: '^${{ matrix.drupal }}'
+        run: bash <(curl -s https://gitlab.com/drupalspoons/composer-plugin/-/raw/master/bin/setup)
+        env:
+          DRUPAL_CORE_CONSTRAINT: ${{ matrix.drupal }}
 
       - name: Test
-        uses: wunderwerkio/github-action-composer@v1-beta
-        with:
-          php_version: ${{ matrix.php }}
-          command: unit
+        run: composer run-script unit
