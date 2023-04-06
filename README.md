@@ -34,10 +34,10 @@ flowchart TD
 
 ## Technical Details
 
-To use verification, the `verification.request_verifier` provides a `verify` method to verify an HTTP request.
+To use verification, the `verification.request_verifier` provides a `verify` method to verify an HTTP request for a given operation or login.
 
 It is up to the Verification Provider Plugin to make sure that the given request has the correct verification data to
-verify, that the given `$user` is allowed to perform the given `$operation`.
+verify and that the given `$user` is allowed to perform the given `$operation`.
 
 ### Using a different email
 
@@ -78,17 +78,37 @@ class MyController extends ControllerBase {
     // Verify the operation.
     $result = $this->verifier->verifyOperation($request, 'update-password', $user, $mail);
 
-    // If multiple Verification Providers are available, all results
-    // of the individual providers are aggregated to a single $result.
-    if (!$result->ok) {
-      return $result->toErrorResponse();
+    // Check if OK.
+    if ($result->ok) {
+      // The verification was successful! Yay!
+
+      // More information MAY be found by checking the code.
+      echo $result->code;
     }
 
-    // Implementation here...
+    // Check if unhandled.
+    if ($result->unhandled) {
+      // The verification was not handled.
+      // This is the case if none of the registered verification providers
+      // could relevant verification data in the request.
+    }
 
-    return new JsonResponse([
-      'status' => 'success'
-    ]);
+    // Check if error.
+    if ($result->err) {
+      // The verification was handled, but resulted in an error.
+
+      // An error code is always set.
+      // Possible error codes depend on the verification provider.
+      echo $result->code;
+    }
+
+    // For convenience, the result can also generate a JSON:API schema conform
+    // error message, if the result was not OK, otherwise returns NULL.
+    //
+    // @see https://github.com/wunderwerkio/jsonapi-error
+    if ($response = $result->toErrorResponse()) {
+      return $response;
+    }
   }
 
 }
