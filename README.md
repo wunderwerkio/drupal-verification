@@ -1,53 +1,78 @@
-# Verification API [![Lint & Test](https://github.com/wunderwerkio/drupal-verification/actions/workflows/main.yml/badge.svg)](https://github.com/wunderwerkio/drupal-verification/actions/workflows/main.yml)
+# Drupal Verification API
 
-The Verification API module provides the foundation to have multiple Verification Provider Plugins verify a given HTTP Request for a given User that a specific operation (e.g. password-reset) can be done.
+[![Lint & Test](https://github.com/wunderwerkio/drupal-verification/actions/workflows/main.yml/badge.svg)](https://github.com/wunderwerkio/drupal-verification/actions/workflows/main.yml)
+
+This drupal module provides the foundation to implement verification for various operations (e.g. reset password, change email or passwordless logins) that a drupal user can do.
+That is done by having multiple `VerificationProvider` plugins verifying a request.
 
 **Table of Contents:**
 
 - [Motivation](#motivation)
-- [Diagram](#diagram)
-- [Technical Details](#technical-details)
-  - [Using a different email](#using-a-different-email)
-  - [Using multiple verification providers](#using-multiple-verification-providers)
+- [Concept](#concept)
+  - [Diagram](#diagram)
+- [Example](#example)
 - [Built-in Verification Providers](#built-in-verification-providers)
   - [Hash Provider](#hash-provider)
 - [Implementing a custom provider](#implementing-a-custom-provider)
 
 ## Motivation
 
-In decoupled scenarios, handling verification of security-sensitive operations (e.g. email update, password reset, account cancellation) can be very tedious to implement, especially if multiple verification methods should be supported.
+In decoupled scenarious, some operations like updating a user email, resetting the password or cancelling a user account need additional verification as an additional security measure.
 
-This module tries to solve this issue by implementing `VerificationProvider` Plugins that take a HTTP Request, a User and an operation to then verify those parameters for the given operation.
+Additionally some operations must also be preceeded by a login, because the user might not be able to login (e.g. when performing a password reset).
+The verification must then be able to verify the login AND the operation (e.g. the password reset).
 
-## Diagram
+This module tries to solve this problem by providing the foundation for a sophisticated verification system.
 
-The following diagram shows how the Verification API works.
+## Concept
+
+The Verification API revolves around having **Plugins** that implement the `VerificationProviderBase` class. The plugins job is to verify a given request and return a `VerificationResult`.
+
+Given that a login may preceed the actual operation, the verification is split into two parts:
+
+1. (optional) Verify if the verification method is eligible for a login
+2. Verify if the verification method is eligible for the operation
+
+*The verification method MUST be independendtly invalidated for login and the operation!*
+
+Therefore each plugin must implement the `verifyLogin` and `verifyOperation` methods.
+
+> **Note**
+> Each plugin is responsible to invalidate the verification method once it has been used, and to implement appropriate security measures, like prohibiting brute force attacks!
+
+The verification is strictly tied to the following aspects:
+
+- **Operation** - A string describing what operation should be made
+- **User** - The drupal user that the operation is performed on
+- **Email** - If a different email address then the user's should be used
+
+If these change between verification start and finish, the verification MUST fail.
+
+### Diagram
 
 ```mermaid
-flowchart TD
-    A[Client] -->|Request| B(Protected Route)
-    B --> C{Verification Provider}
-    C -->|Valid Verification Data| D[Success]
-    C -->|Invalid Verification Data| E[Error]
-    C -->|No Verification Data| F[Unhandled]
+flowchart LR
+    A[Incoming Request] -->|Needs Verification| Verification-API
+
+    subgraph Verification-API
+        C[Request Verifier] --> |Calls all Verification Providers| Verification-Provider
+
+        subgraph Verification-Provider
+            direction TB
+            D{Verification\nProvider} -->|Valid Verification Data| E[Ok]
+            D -->|Invalid Verification Data| F[Err]
+            D -->|No Verification Data| G[Unhandled]
+        end
+
+        Verification-Provider --> H[Create\naggregated\nResult]
+    end
+
+    Verification-API -->  R{Check\nResult}
+
+    R --> |Ok| X[Proceed with\nRequest Handling]
+    R --> |Error| Z[Return Error]
+    R --> |Unhandled| Z[Return Error]
 ```
-
-## Technical Details
-
-To use verification, the `verification.request_verifier` provides a `verify` method to verify an HTTP request for a given operation or login.
-
-It is up to the Verification Provider Plugin to make sure that the given request has the correct verification data to
-verify and that the given `$user` is allowed to perform the given `$operation`.
-
-### Using a different email
-
-To support more complex scenarios, a different email can be passed to the `verify` method, that is differnt than the email
-address that is set on the user account.
-
-### Using multiple verification providers
-
-When using multiple verification providers, the `verification.request_verifier` services tries all available plugins
-until the first one successfully verifies the request.
 
 ## Example
 
@@ -142,4 +167,75 @@ To implement a custom Verification Provider, create a new `VerificationProvider`
 is annotated with the `VerificationProvider` annotation, extends the `VerificationProviderBase` class
 and implements the `VerificationProviderInterface` interface.
 
-For an example, simply look at the source code of the `Drupal\verification\Plugin\Verification\Hash` class.
+> **Note**
+> Do not forget to invalidate data, so that a verification method cannot be re-used.
+
+A real implementation can be found at `./modules/verification_hash/src/Plugin/VerificationProvider/Hash.php`.
+
+**This is a crude example**
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace Drupal\verification_hash\Plugin\VerificationProvider;
+
+use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
+use Drupal\Core\Session\AccountInterface;
+use Drupal\verification\Plugin\VerificationProviderBase;
+use Symfony\Component\HttpFoundation\Request;
+use Drupal\verification\Result\VerificationResult;
+
+/**
+ * Custom verification provider plugin.
+ *
+ * @VerificationProvider(
+ *   id = "custom_provider",
+ *   label = @Translation("Custom Provider"),
+ * )
+ */
+class CustomProvider extends VerificationProviderBase implements ContainerFactoryPluginInterface {
+
+  /**
+   * {@inheritdoc}
+   */
+  public function verifyLogin(Request $request, string $operation, AccountInterface $user, ?string $email = NULL): VerificationResult {
+    // Implement login verification here...
+
+    if ($verification_data_not_found) {
+      return VerificationResult::unhandled();
+    }
+
+    // Invalidate verification method for `login` here if it was handled.
+
+    if ($verification_was_successful) {
+      return VerificationResult::ok();
+    }
+
+    if ($verification_has_failed) {
+      return VerificationResult::err('some_error_code');
+    }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function verifyOperation(Request $request, string $operation, AccountInterface $user, ?string $email = NULL): VerificationResult {
+    // Implement operation verification here...
+
+    if ($verification_data_not_found) {
+      return VerificationResult::unhandled();
+    }
+
+    if ($verification_was_successful) {
+      return VerificationResult::ok();
+    }
+
+    if ($verification_has_failed) {
+      return VerificationResult::err('some_error_code');
+    }
+  }
+
+}
+```
