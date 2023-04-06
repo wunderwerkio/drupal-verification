@@ -1,6 +1,7 @@
 # Drupal Verification API
 
 [![Lint & Test](https://github.com/wunderwerkio/drupal-verification/actions/workflows/main.yml/badge.svg)](https://github.com/wunderwerkio/drupal-verification/actions/workflows/main.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=wunderwerkio_drupal-verification&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=wunderwerkio_drupal-verification)
 
 This drupal module provides the foundation to implement verification for various operations (e.g. reset password, change email or passwordless logins) that a drupal user can do.
 That is done by having multiple `VerificationProvider` plugins verifying a request.
@@ -11,9 +12,9 @@ That is done by having multiple `VerificationProvider` plugins verifying a reque
 - [Concept](#concept)
   - [Diagram](#diagram)
 - [Example](#example)
-- [Built-in Verification Providers](#built-in-verification-providers)
+- [Verification Providers](#verification-providers)
   - [Hash Provider](#hash-provider)
-- [Implementing a custom provider](#implementing-a-custom-provider)
+  - [Implement your own provider](#implement-your-own-provider)
 
 ## Motivation
 
@@ -139,9 +140,14 @@ class MyController extends ControllerBase {
 }
 ```
 
-## Built-in Verification Providers
+## Verification Providers
 
-The Verification API includes built-in verification providers as submodules.
+Here is a curated list of verification providers that utilize the Verification API:
+
+- [Hash (built-in)](#hash-provider)
+- [Magic Code](https://github.com/wunderwerkio/drupal-magic-code)
+
+*If you want your verification provider listed, feel free to open an issue.*
 
 ### Hash Provider
 
@@ -161,7 +167,7 @@ The generated hash and passed hash are then compared if they match.
 In addition, the hash is only valid for the configured password
 reset timeout in `user.settings.password_reset_timeout`.
 
-## Implementing a custom provider
+### Implement your own provider
 
 To implement a custom Verification Provider, create a new `VerificationProvider` Plugin that
 is annotated with the `VerificationProvider` annotation, extends the `VerificationProviderBase` class
