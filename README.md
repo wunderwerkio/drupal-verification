@@ -1,3 +1,10 @@
+# Important Notice
+
+The version control was moved to Drupal's GitLab instance!  
+See https://www.drupal.org/project/verification for more info!
+
+---
+
 # Drupal Verification API
 
 [![Lint & Test](https://github.com/wunderwerkio/drupal-verification/actions/workflows/main.yml/badge.svg)](https://github.com/wunderwerkio/drupal-verification/actions/workflows/main.yml)
